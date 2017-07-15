@@ -1,0 +1,74 @@
+#!/bin/bash
+
+REPORT=/tmp/zfs-check-$$.log
+LOGFILE=/var/log/zfs-status.log
+MAXCAPACITY=95
+MAILNOTIFY=false
+MAILRECIPIENT="fchin.uk@gmail.com"
+
+echo -e "Starting zfs-check on `date`\n" >> $REPORT
+
+mail_report() { # subject
+  local EMAILSUBJECT="$*"
+  cat $REPORT | mail -s "${EMAILSUBJECT}" $MAILRECIPIENT
+  rm $REPORT
+}
+
+# Assess general zpool health status
+ZPOOLCONDITION=`zpool status -x`
+case $ZPOOLCONDITION in
+  "all pools are healthy")
+    echo -e "zpool health ok: $ZPOOLCONDITION" >> $REPORT
+    zpool status -v | grep -E '(pool:|scan:)' >> $REPORT
+    ;;
+  "no pools available")
+    echo -e "No pools mounted, aborting check\n" >> $REPORT
+    cat $REPORT >> $LOGFILE
+    mail_report "No ZFS pools mounted on `uname -n`"
+    exit 1
+    ;;
+  *)
+    echo -e "zpool health warning:\n`zpool status -v`" >> $REPORT
+    MAILNOTIFY=true
+    ;;
+esac
+
+# Check for drive errors
+DRIVEERRORS=`zpool status | grep ONLINE | grep -v state: | awk '{print $3 $4 $5}' | grep -v 000`
+if [ "$DRIVEERRORS" ]; then
+  echo -e "\nzpool errors:\n`zpool status | grep ONLINE | grep -v state:`\n" >> $REPORT
+  MAILNOTIFY=true
+fi
+
+# Assess zpool capacity utilisation
+echo -e "\n\nzpool utilisation:\n" >> $REPORT
+CAPACITY=`zpool list -H -o capacity`
+for line in ${CAPACITY//%/}
+do
+  if [ $line -ge $MAXCAPACITY ]; then
+    echo -e "Capacity exceeds $MAXCAPACITY% in a zpool\n" >> $REPORT
+    MAILNOTIFY=true
+  fi
+done
+zpool list >> $REPORT
+echo -e "\n\nvdev utilisation:\n" >> $REPORT
+zpool iostat -v >> $REPORT
+
+# Show zfs dataset usage
+echo -e "\n\nzfs dataset utilisation:\n" >> $REPORT
+zfs list >> $REPORT
+echo -e "\n\nzfs non-auto snapshot utilisation:\n" >> $REPORT
+ZPOOLLIST=`zpool list -H -o name`
+for pool in ${ZPOOLLIST}
+do
+  zfs list -t snapshot -r $pool | grep -v "zfs-auto-snap_"  >> $REPORT
+done
+echo -e "\n--------------------------------------------------------------------\n\n" >> $REPORT
+
+cat $REPORT >> $LOGFILE
+if [ $MAILNOTIFY = true ]; then
+  mail_report "ZFS health warning for `uname -n`"
+else
+  rm $REPORT
+fi
+
