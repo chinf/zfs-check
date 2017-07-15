@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REPORT=/tmp/zfs-check-$$.log
-LOGFILE=/var/log/zfs-status.log
+LOGFILE=/var/log/zfs-check.log
 MAXCAPACITY=95
 MAILNOTIFY=false
 MAILRECIPIENT="fchin.uk@gmail.com"
