@@ -84,7 +84,7 @@ optionally alert via email if there are any warnings.
 exit 2
 }
 
-while getopts ":cd:m:nslL:" OPT; do
+while getopts ":c:dm:nslL:" OPT; do
   case "${OPT}" in
     c)
       if [ "${OPTARG}" ]; then
