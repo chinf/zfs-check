@@ -1,7 +1,29 @@
 #!/bin/bash
 
-# zfs-check
+# zfs-check - ZFS health check, utilisation logging and alerting
 # Copyright (C) 2017 Francis Chin <dev@fchin.com>
+#
+# Repository: https://github.com/chinf/zfs-check.git
+#
+# Based on durandalTR's zstandby script
+# (https://github.com/zfsonlinux/pkg-zfs/issues/54) and also
+# zfs-auto-snapshot (https://github.com/zfsonlinux/zfs-auto-snapshot)
+# 
+# Awk compatibility note:
+# Tested with mawk and gawk for wider compatibility
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser
+# General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 log() { # level, message
   local LEVEL=$1
@@ -115,7 +137,7 @@ ZPOOLSTATUSV=`sudo zpool status -v`
 if [ "${ZPOOLSTATUSV}" = "no pools available" ]; then
   if [ "${NOPOOLS}" ]; then
     log warning "No pools available"
-    mail_report "warning: no ZFS pools available"
+    mail_report "[no ZFS pools available]"
   else
     log summary "No pools available"
   fi
@@ -130,12 +152,14 @@ if [ "$ZPOOLCONDITION" = "all pools are healthy" ]; then
   log summary "zfs-check info: ${ZPOOLCONDITION}\n"
 else
   log warning "zpool health: ${ZPOOLCONDITION}\n"
+  SUBJECT+="[ZFS pool health warning]"
 fi
 # Check for drive errors on ONLINE VDEVs
 VDEVERRORS=`echo "${ZPOOLSTATUSV}" \
 | awk '$1 != "state:" && $2 == "ONLINE" && $3 $4 $5 != "000"'`
 if [ "$VDEVERRORS" ]; then
   log warning "vdev errors reported"
+  SUBJECT+="[vdev errors]"
   # Print title row
   log info `echo "${ZPOOLSTATUSV}" | awk '$1 == "NAME"' | head -1`
   log info "${VDEVERRORS}\n"
@@ -148,6 +172,7 @@ CAPWARN=`echo "${CAPACITY}" | awk -v max="${MAXCAPACITY}" \
   '$2 > max { print "utilisation is "$2" in "$1" with "$3" free" }'`
 if [ "${CAPWARN}" ]; then
   log warning "${CAPWARN}\n"
+  SUBJECT+="[ZFS pool capacity warning]"
 fi
 
 # Show zfs dataset usage
@@ -159,6 +184,6 @@ log info "`sudo zfs list -rt snapshot | grep -v ${ZFSAUTOSNAPLABEL}`\n"
 log info "zfs-check finished: `date`"
 log info "---------------------------------------------------------------"
 if [ "${MAILNOTIFY}" ]; then
-  mail_report "ZFS health warning"
+  mail_report "${SUBJECT}"
 fi
 write_log
