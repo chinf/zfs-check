@@ -41,7 +41,7 @@ write_log() {
 #
 REPORT=/tmp/zfs-check-$$.log
 DEFAULTLOG=/var/log/zfs-check.log
-MAXCAPACITY=95
+MAXCAPACITY=75
 ZFSAUTOSNAPLABEL=zfs-auto-snap_
 
 print_usage() {
