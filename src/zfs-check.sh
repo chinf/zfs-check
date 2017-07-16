@@ -3,8 +3,6 @@
 # zfs-check
 # Copyright (C) 2017 Francis Chin <dev@fchin.com>
 
-REPORT=/tmp/zfs-check-$$.log
-
 log() { # level, message
   local LEVEL=$1
   shift 1
@@ -21,57 +19,6 @@ log() { # level, message
     (inf*) if [ -z "${SUMMARY}" ]; then echo -e "$*" >> $REPORT; fi ;;
   esac
 }
-
-#
-# Options
-#
-DEFAULTLOG=/var/log/zfs-check.log
-MAXCAPACITY=95
-ZFSAUTOSNAPLABEL=zfs-auto-snap_
-
-print_usage() {
-  echo "Usage: $0 [-l|-L LOGFILE] [-m ADDRESS] [-c CAPACITY] [-s]
-Use ZFS utilities to log the health and status of all mounted pools, and
-optionally alert via email if there are any warnings.
-
-  -l           Instead of sending output to STDOUT, append to a log at
-               the default location ${DEFAULTLOG}
-
-  -L LOGFILE   Append output to LOGFILE instead of STDOUT. 
-
-  -m ADDRESS   Email warnings to ADDRESS.
-
-  -c CAPACITY  Use a zpool utilisation upper limit of CAPACITY% instead
-               of the default upper limit ${MAXCAPACITY}%.
-
-  -s           Summary mode.
-" >&2
-exit 2
-}
-
-while getopts ":lL:m:c:s" OPT; do
-  case "${OPT}" in
-    l) LOG="${DEFAULTLOG}" ;;
-    L) LOG="${OPTARG}" ;;
-    m)
-      if [ "${OPTARG}" ]; then
-        EMAIL="${OPTARG}"
-      else
-        print_usage
-      fi
-      ;;
-    c)
-      if [ "${OPTARG}" ]; then
-        MAXCAPACITY="${OPTARG}"
-      else
-        print_usage
-      fi
-      ;;
-    s) SUMMARY=yes ;;
-    *) print_usage ;;
-  esac
-done
-shift $((OPTIND-1))
 
 mail_report() { # email subject
   if [ "${EMAIL}" ]; then
@@ -90,6 +37,75 @@ write_log() {
 }
 
 #
+# Options
+#
+REPORT=/tmp/zfs-check-$$.log
+DEFAULTLOG=/var/log/zfs-check.log
+MAXCAPACITY=95
+ZFSAUTOSNAPLABEL=zfs-auto-snap_
+
+print_usage() {
+  echo "Usage: $0 [options] [-l|-L LOGFILE]
+Use ZFS utilities to log the health and status of all mounted pools, and
+optionally alert via email if there are any warnings.
+
+  -c CAPACITY  Use a zpool utilisation upper limit of CAPACITY% instead
+               of the default upper limit ${MAXCAPACITY}%.
+
+  -m ADDRESS   Email warnings to ADDRESS.
+
+  -n           No pools alert. If no pools are available on the host,
+               trigger an email warning if the -m option is set.
+
+  -s           Summary mode.
+
+  -l           Instead of sending output to STDOUT, append to a log at
+               the default location ${DEFAULTLOG}
+
+  -L LOGFILE   Append output to LOGFILE instead of STDOUT. 
+" >&2
+exit 2
+}
+
+while getopts ":c:m:nslL:" OPT; do
+  case "${OPT}" in
+    c)
+      if [ "${OPTARG}" ]; then
+        MAXCAPACITY="${OPTARG}"
+      else
+        print_usage
+      fi
+      ;;
+    m)
+      if [ "${OPTARG}" ]; then
+        EMAIL="${OPTARG}"
+      else
+        print_usage
+      fi
+      ;;
+    n) NOPOOLS=yes ;;
+    s) SUMMARY=yes ;;
+    l) LOG="${DEFAULTLOG}" ;;
+    L) LOG="${OPTARG}" ;;
+    *) print_usage ;;
+  esac
+done
+shift $((OPTIND-1))
+
+#
+# Configuration validation
+#
+if [ "${LOG}" ]; then
+  if [ !-w "${LOG}" ]; then
+    log error "Log file ${LOG} cannot be written to."
+    LOG=
+    mail_report "Error: cannot write to log"
+    write_log
+    exit 1
+  fi
+fi
+
+#
 # main()
 #
 log summary "zfs-check started: `date`\n"
@@ -97,9 +113,13 @@ log summary "zfs-check started: `date`\n"
 # Show general zpool status and configuration
 # ZPOOLLIST=`sudo zpool list -H -o name`
 ZPOOLSTATUSV=`sudo zpool status -v`
-if [ "$ZPOOLSTATUSV" = "no pools available" ]; then
-  log warning "No pools mounted, aborting check"
-  mail_report "warning: no ZFS pools mounted"
+if [ "${ZPOOLSTATUSV}" = "no pools available" ]; then
+  if [ "${NOPOOLS}" ]; then
+    log warning "No pools available"
+    mail_report "warning: no ZFS pools available"
+  else
+    log summary "No pools available"
+  fi
   write_log
   exit 3
 fi
