@@ -1,0 +1,3 @@
+#!/bin/sh
+
+which zfs-check > /dev/null && zfs-check -sl
