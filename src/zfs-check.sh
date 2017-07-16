@@ -74,7 +74,7 @@ optionally alert via email if there are any warnings.
   -n           No pools alert. If no pools are available on the host,
                trigger an email warning if the -m option is set.
 
-  -s           Summary mode.
+  -s           Summary mode.  Overrides -d.
 
   -l           Instead of sending output to STDOUT, append to a log at
                the default location ${DEFAULTLOG}
