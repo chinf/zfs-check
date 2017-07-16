@@ -96,9 +96,8 @@ shift $((OPTIND-1))
 # Configuration validation
 #
 if [ "${LOG}" ]; then
-  if [ !-w "${LOG}" ]; then
+  if [ ! -w "${LOG}" ]; then
     log error "Log file ${LOG} cannot be written to."
-    LOG=
     mail_report "Error: cannot write to log"
     write_log
     exit 1
