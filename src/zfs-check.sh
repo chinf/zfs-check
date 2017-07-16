@@ -5,13 +5,6 @@
 #
 # Repository: https://github.com/chinf/zfs-check.git
 #
-# Based on durandalTR's zstandby script
-# (https://github.com/zfsonlinux/pkg-zfs/issues/54) and also
-# zfs-auto-snapshot (https://github.com/zfsonlinux/zfs-auto-snapshot)
-# 
-# Awk compatibility note:
-# Tested with mawk and gawk for wider compatibility
-#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
 # by the Free Software Foundation, either version 3 of the License, or (at
