@@ -3,7 +3,7 @@
 # zfs-check - ZFS health check, utilisation logging and alerting
 # Copyright (C) 2017 Francis Chin <dev@fchin.com>
 #
-# Repository: https://github.com/chinf/zfs-check.git
+# Repository: https://github.com/chinf/zfs-check
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
@@ -67,6 +67,8 @@ optionally alert via email if there are any warnings.
   -c CAPACITY  Use a zpool utilisation upper limit of CAPACITY% instead
                of the default upper limit ${MAXCAPACITY}%.
 
+  -d           Show ZFS dataset (filesystem and snapshot) usage.
+
   -m ADDRESS   Email warnings to ADDRESS.
 
   -n           No pools alert. If no pools are available on the host,
@@ -82,7 +84,7 @@ optionally alert via email if there are any warnings.
 exit 2
 }
 
-while getopts ":c:m:nslL:" OPT; do
+while getopts ":cd:m:nslL:" OPT; do
   case "${OPT}" in
     c)
       if [ "${OPTARG}" ]; then
@@ -91,6 +93,7 @@ while getopts ":c:m:nslL:" OPT; do
         print_usage
       fi
       ;;
+    d) DATASET=show ;;
     m)
       if [ "${OPTARG}" ]; then
         EMAIL="${OPTARG}"
@@ -98,7 +101,7 @@ while getopts ":c:m:nslL:" OPT; do
         print_usage
       fi
       ;;
-    n) NOPOOLS=yes ;;
+    n) NOPOOLS=warn ;;
     s) SUMMARY=yes ;;
     l) LOG="${DEFAULTLOG}" ;;
     L) LOG="${OPTARG}" ;;
@@ -125,7 +128,6 @@ fi
 log summary "zfs-check started: `date`\n"
 
 # Show general zpool status and configuration
-# ZPOOLLIST=`sudo zpool list -H -o name`
 ZPOOLSTATUSV=`sudo zpool status -v`
 if [ "${ZPOOLSTATUSV}" = "no pools available" ]; then
   if [ "${NOPOOLS}" ]; then
@@ -168,10 +170,12 @@ if [ "${CAPWARN}" ]; then
   SUBJECT+="[ZFS pool capacity warning]"
 fi
 
-# Show zfs dataset usage
-log info "zfs dataset utilisation:\n`sudo zfs list`\n"
-log info "zfs non-auto snapshot utilisation:"
-log info "`sudo zfs list -rt snapshot | grep -v ${ZFSAUTOSNAPLABEL}`\n"
+if [ "${DATASET}" ]; then
+  # Show zfs dataset usage
+  log info "zfs dataset utilisation:\n`sudo zfs list`\n"
+  log info "zfs non-auto snapshot utilisation:"
+  log info "`sudo zfs list -rt snapshot | grep -v ${ZFSAUTOSNAPLABEL}`\n"
+fi
 
 # End zfs-check
 log info "zfs-check finished: `date`"
