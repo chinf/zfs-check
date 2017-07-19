@@ -1,7 +1,11 @@
 # zfs-check
 ZFS health check, utilisation logging and alerting
 
-Depends on the standard ZFS utilities and bash shell. Email alerts depend upon the host being set up to send emails, a package like ssmtp will suffice.
+Depends upon:
+
+* the standard ZFS utilities
+* bash shell
+* (for email alerts) the host being set up to send emails; one possibility is to use `bsd-mailx` and `ssmtp`, but several alternatives exist.
 
 ## Installation
 ```

@@ -22,41 +22,41 @@ log() { # level, message
   local LEVEL=$1
   shift 1
   case $LEVEL in
-    (err*)
-      echo -e "zfs-check error: $*" | tee -a $REPORT >&2
-      MAILNOTIFY=yes
-      ;;
+    (sum*) REPORT+="$*\n" ;;
+    (inf*) if [ -z "${SUMMARY}" ]; then REPORT+="$*\n"; fi ;;
     (war*)
-      echo -e "zfs-check warning: $*" >> $REPORT
+      REPORT+="zfs-check warning: $*\n"
       MAILNOTIFY=yes
       ;;
-    (sum*) echo -e "$*" >> $REPORT ;;
-    (inf*) if [ -z "${SUMMARY}" ]; then echo -e "$*" >> $REPORT; fi ;;
+    *)
+      REPORT+="zfs-check error: $*\n"
+      echo "zfs-check error: $*" >&2
+      MAILNOTIFY=yes
+      ;;
   esac
 }
 
 mail_report() { # email subject
   if [ "${EMAIL}" ]; then
-    mail -s "zfs-check on `uname -n`: $*" "${EMAIL}" < "${REPORT}"
+    echo -e "${REPORT}" | mail -r "zfs-check@`uname -n`" \
+      -s "zfs-check on `uname -n`: $*" "${EMAIL}"
   fi
 }
 
 write_log() {
   if [ "${LOG}" ]; then
     # Append to log file if it already exists, otherwise create it
-    cat $REPORT >> $LOG
+    echo -e "${REPORT}" >> $LOG
   else
-    cat $REPORT >&1
+    echo -e "${REPORT}" >&1
   fi
-  rm $REPORT
 }
 
 #
 # Options
 #
-REPORT=/tmp/zfs-check-$$.log
 DEFAULTLOG=/var/log/zfs-check.log
-MAXCAPACITY=75
+MAXCAPACITY=80
 ZFSAUTOSNAPLABEL=zfs-auto-snap_
 
 print_usage() {
@@ -69,7 +69,8 @@ optionally alert via email if there are any warnings.
 
   -d           Show ZFS dataset (filesystem and snapshot) usage.
 
-  -m ADDRESS   Email warnings to ADDRESS.
+  -m ADDRESS   Email warnings to ADDRESS.  Repeat to specify multiple
+               email addresses.
 
   -n           No pools alert. If no pools are available on the host,
                trigger an email warning if the -m option is set.
@@ -96,7 +97,7 @@ while getopts ":c:dm:nslL:" OPT; do
     d) DATASET=show ;;
     m)
       if [ "${OPTARG}" ]; then
-        EMAIL="${OPTARG}"
+        EMAIL+="${OPTARG} "
       else
         print_usage
       fi
@@ -108,7 +109,6 @@ while getopts ":c:dm:nslL:" OPT; do
     *) print_usage ;;
   esac
 done
-shift $((OPTIND-1))
 
 #
 # Configuration validation
@@ -117,7 +117,6 @@ if [ "${LOG}" ]; then
   if [ ! -w "${LOG}" ]; then
     log error "Log file ${LOG} cannot be written to."
     mail_report "Error: cannot write to log"
-    write_log
     exit 1
   fi
 fi
