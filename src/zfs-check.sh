@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # zfs-check - ZFS health check, utilisation logging and alerting
 # Copyright (C) 2017 Francis Chin <dev@fchin.com>
@@ -19,17 +19,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 log() { # level, message
-  local LEVEL=$1
+  local LEVEL="$1"
   shift 1
   case $LEVEL in
-    (sum*) REPORT+="$*\n" ;;
-    (inf*) if [ -z "${SUMMARY}" ]; then REPORT+="$*\n"; fi ;;
+    (sum*) REPORT="${REPORT}$*\n" ;;
+    (inf*) if [ -z "${SUMMARY}" ]; then REPORT="${REPORT}$*\n"; fi ;;
     (war*)
-      REPORT+="zfs-check warning: $*\n"
+      REPORT="${REPORT}zfs-check warning: $*\n"
       MAILNOTIFY=yes
       ;;
     *)
-      REPORT+="zfs-check error: $*\n"
+      REPORT="${REPORT}zfs-check error: $*\n"
       echo "zfs-check error: $*" >&2
       MAILNOTIFY=yes
       ;;
@@ -38,26 +38,26 @@ log() { # level, message
 
 mail_report() { # email subject
   if [ "${EMAIL}" ]; then
-    echo -e "${REPORT}" | mail -r "zfs-check@`uname -n`" \
-      -s "zfs-check on `uname -n`: $*" "${EMAIL}"
+    echo "${REPORT}" | mail -r "zfs-check@`uname -n`" \
+      -s "zfs-check on `uname -n`:$*" "${EMAIL}"
   fi
 }
 
 write_log() {
   if [ "${LOG}" ]; then
     # Append to log file if it already exists, otherwise create it
-    echo -e "${REPORT}" >> $LOG
+    echo "${REPORT}" >> "${LOG}"
   else
-    echo -e "${REPORT}" >&1
+    echo "${REPORT}" >&1
   fi
 }
 
 #
 # Options
 #
-DEFAULTLOG=/var/log/zfs-check.log
+readonly DEFAULTLOG="/var/log/zfs-check.log"
 MAXCAPACITY=80
-ZFSAUTOSNAPLABEL=zfs-auto-snap_
+readonly ZFSAUTOSNAPLABEL="zfs-auto-snap_"
 
 print_usage() {
   echo "Usage: $0 [options] [-l|-L LOGFILE]
@@ -97,7 +97,7 @@ while getopts ":c:dm:nslL:" OPT; do
     d) DATASET=show ;;
     m)
       if [ "${OPTARG}" ]; then
-        EMAIL+="${OPTARG} "
+        EMAIL="${EMAIL} ${OPTARG}"
       else
         print_usage
       fi
@@ -131,7 +131,7 @@ ZPOOLSTATUSV=`sudo zpool status -v`
 if [ "${ZPOOLSTATUSV}" = "no pools available" ]; then
   if [ "${NOPOOLS}" ]; then
     log warning "No pools available"
-    mail_report "[no ZFS pools available]"
+    mail_report " [no ZFS pools available]"
   else
     log summary "No pools available"
   fi
@@ -146,14 +146,14 @@ if [ "$ZPOOLCONDITION" = "all pools are healthy" ]; then
   log summary "zfs-check info: ${ZPOOLCONDITION}\n"
 else
   log warning "zpool health: ${ZPOOLCONDITION}\n"
-  SUBJECT+="[ZFS pool health warning]"
+  SUBJECT="${SUBJECT} [ZFS pool health warning]"
 fi
 # Check for drive errors on ONLINE VDEVs
 VDEVERRORS=`echo "${ZPOOLSTATUSV}" \
 | awk '$1 != "state:" && $2 == "ONLINE" && $3 $4 $5 != "000"'`
 if [ "$VDEVERRORS" ]; then
   log warning "vdev errors reported"
-  SUBJECT+="[vdev errors]"
+  SUBJECT="${SUBJECT} [vdev errors]"
   # Print title row
   log info `echo "${ZPOOLSTATUSV}" | awk '$1 == "NAME"' | head -1`
   log info "${VDEVERRORS}\n"
@@ -166,7 +166,7 @@ CAPWARN=`echo "${CAPACITY}" | awk -v max="${MAXCAPACITY}" \
   '$2 > max { print "utilisation is "$2" in "$1" with "$3" free" }'`
 if [ "${CAPWARN}" ]; then
   log warning "${CAPWARN}\n"
-  SUBJECT+="[ZFS pool capacity warning]"
+  SUBJECT="${SUBJECT} [ZFS pool capacity warning]"
 fi
 
 if [ "${DATASET}" ]; then
