@@ -18,6 +18,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+NAME=$(basename $0)
+
 log() { # level, message
   local LEVEL="$1"
   shift 1
@@ -25,12 +27,12 @@ log() { # level, message
     (sum*) REPORT="${REPORT}$*\n" ;;
     (inf*) if [ -z "${SUMMARY}" ]; then REPORT="${REPORT}$*\n"; fi ;;
     (war*)
-      REPORT="${REPORT}zfs-check warning: $*\n"
+      REPORT="${REPORT}${NAME} warning: $*\n"
       MAILNOTIFY=yes
       ;;
     *)
-      REPORT="${REPORT}zfs-check error: $*\n"
-      echo "zfs-check error: $*" >&2
+      REPORT="${REPORT}${NAME} error: $*\n"
+      echo "${NAME} error: $*" >&2
       MAILNOTIFY=yes
       ;;
   esac
@@ -38,8 +40,8 @@ log() { # level, message
 
 mail_report() { # email subject
   if [ "${EMAIL}" ]; then
-    echo "${REPORT}" | mail -r "zfs-check@`uname -n`" \
-      -s "zfs-check on `uname -n`:$*" "${EMAIL}"
+    echo "${REPORT}" | mail -r "${NAME}@`uname -n`" \
+      -s "${NAME} on `uname -n`:$*" "${EMAIL}"
   fi
 }
 
@@ -55,12 +57,12 @@ write_log() {
 #
 # Options
 #
-readonly DEFAULTLOG="/var/log/zfs-check.log"
+readonly DEFAULTLOG="/var/log/${NAME}.log"
 MAXCAPACITY=80
 readonly ZFSAUTOSNAPLABEL="zfs-auto-snap_"
 
 print_usage() {
-  echo "Usage: $0 [options] [-l|-L LOGFILE]
+  echo "Usage: ${NAME} [options] [-l|-L LOGFILE]
 Use ZFS utilities to log the health and status of all mounted pools, and
 optionally alert via email if there are any warnings.
 
@@ -110,6 +112,11 @@ while getopts ":c:dm:nslL:" OPT; do
   esac
 done
 
+if [ $(id -u) -ne 0 ]; then
+  echo "Please run ${NAME} as root"
+  exit 2
+fi
+
 #
 # Configuration validation
 #
@@ -124,10 +131,10 @@ fi
 #
 # main()
 #
-log summary "zfs-check started: `date`\n"
+log summary "${NAME} started: $(date)\n"
 
 # Show general zpool status and configuration
-ZPOOLSTATUSV=`sudo zpool status -v`
+ZPOOLSTATUSV=$(zpool status -v)
 if [ "${ZPOOLSTATUSV}" = "no pools available" ]; then
   if [ "${NOPOOLS}" ]; then
     log warning "No pools available"
@@ -141,29 +148,31 @@ fi
 log info "zpool status:\n${ZPOOLSTATUSV}\n"
 
 # Assess zpool health status
-ZPOOLCONDITION=`sudo zpool status -x`
+ZPOOLCONDITION=$(zpool status -x)
 if [ "$ZPOOLCONDITION" = "all pools are healthy" ]; then
-  log summary "zfs-check info: ${ZPOOLCONDITION}\n"
+  log summary "${NAME} info: ${ZPOOLCONDITION}\n"
 else
   log warning "zpool health: ${ZPOOLCONDITION}\n"
   SUBJECT="${SUBJECT} [ZFS pool health warning]"
 fi
+
 # Check for drive errors on ONLINE VDEVs
-VDEVERRORS=`echo "${ZPOOLSTATUSV}" \
-| awk '$1 != "state:" && $2 == "ONLINE" && $3 $4 $5 != "000"'`
+VDEVERRORS=$(echo "${ZPOOLSTATUSV}" \
+| awk '$1 != "state:" && $2 == "ONLINE" && $3 $4 $5 != "000"')
 if [ "$VDEVERRORS" ]; then
   log warning "vdev errors reported"
   SUBJECT="${SUBJECT} [vdev errors]"
   # Print title row
-  log info `echo "${ZPOOLSTATUSV}" | awk '$1 == "NAME"' | head -1`
+  log info $(echo "${ZPOOLSTATUSV}" | awk '$1 == "NAME"' | head -1)
   log info "${VDEVERRORS}\n"
 fi
 
 # Assess zpool capacity utilisation
-log summary "zpool utilisation summary:\n`sudo zpool list`\n"
-CAPACITY=`sudo zpool list -H -o name,capacity,free`
-CAPWARN=`echo "${CAPACITY}" | awk -v max="${MAXCAPACITY}" \
-  '$2 > max { print "utilisation is "$2" in "$1" with "$3" free" }'`
+log summary "zpool utilisation summary:\n$(zpool list)\n"
+CAPACITY=$(zpool list -H -o name,capacity,free)
+CAPWARN=$(echo "${CAPACITY}" \
+| awk -v max="${MAXCAPACITY}" \
+  '$2 > max { print "utilisation is "$2" in "$1" with "$3" free" }')
 if [ "${CAPWARN}" ]; then
   log warning "${CAPWARN}\n"
   SUBJECT="${SUBJECT} [ZFS pool capacity warning]"
@@ -173,11 +182,11 @@ if [ "${DATASET}" ]; then
   # Show zfs dataset usage
   log info "zfs dataset utilisation:\n`sudo zfs list`\n"
   log info "zfs non-auto snapshot utilisation:"
-  log info "`sudo zfs list -rt snapshot | grep -v ${ZFSAUTOSNAPLABEL}`\n"
+  log info "$(zfs list -rt snapshot | grep -v ${ZFSAUTOSNAPLABEL})\n"
 fi
 
 # End zfs-check
-log info "zfs-check finished: `date`"
+log info "${NAME} finished: $(date)"
 log info "---------------------------------------------------------------"
 if [ "${MAILNOTIFY}" ]; then
   mail_report "${SUBJECT}"
